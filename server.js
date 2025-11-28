@@ -8,34 +8,38 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// PUBLIC UPLOADS FOLDER
+// serve images
 app.use("/uploads", express.static("uploads"));
 
-// READ users.json
+// ---------- Load & Save Users ----------
 function loadUsers() {
-    let data = fs.readFileSync("users.json");
-    return JSON.parse(data);
+    if (!fs.existsSync("users.json")) return [];
+    return JSON.parse(fs.readFileSync("users.json"));
 }
 
-// WRITE users.json
-function saveUsers(users) {
-    fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
+function saveUsers(data) {
+    fs.writeFileSync("users.json", JSON.stringify(data, null, 2));
 }
 
-// MULTER STORAGE
+// ---------- MULTER UPLOAD ----------
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/");
   },
   filename: function (req, file, cb) {
-    const name = Date.now() + path.extname(file.originalname);
-    cb(null, name);
+    cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-
 const upload = multer({ storage });
 
-// ROUTE 1: REGISTER WITHOUT PIC
+// ---------- ROUTES ----------
+
+// GET ALL USERS
+app.get("/users", (req, res) => {
+    res.json(loadUsers());
+});
+
+// REGISTER
 app.post("/register-no-pic", (req, res) => {
     const { username, password } = req.body;
 
@@ -45,7 +49,7 @@ app.post("/register-no-pic", (req, res) => {
         id: Date.now(),
         username,
         password,
-        profilePic: "/uploads/default.png"  // default image
+        profilePic: "/uploads/default.png"
     };
 
     users.push(newUser);
@@ -54,34 +58,29 @@ app.post("/register-no-pic", (req, res) => {
     res.json({ message: "User created", user: newUser });
 });
 
-// ROUTE 2: UPDATE PROFILE PIC
+// upload profile pic
 app.post("/upload-profile", upload.single("profilePic"), (req, res) => {
     const { userId } = req.body;
-    const fileName = req.file.filename;
+    const filename = req.file.filename;
 
     let users = loadUsers();
     let user = users.find(u => u.id == userId);
 
-    if (!user) return res.json({ error: "User not found" });
+    if (!user) return res.status(400).json({ error: "User not found" });
 
-    user.profilePic = `/uploads/${fileName}`;
+    user.profilePic = "/uploads/" + filename;
+
     saveUsers(users);
 
-    res.json({ message: "Profile picture updated", user });
+    res.json({ message: "Profile updated", user });
 });
 
-// ROUTE 3: GET ALL USERS
-app.get("/users", (req, res) => {
-  res.json(loadUsers());
-});
-
-// TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("Backend is running online!");
+    res.send("Backend is running online!");
 });
 
-// START SERVER
 const PORT = process.env.PORT || 4000;
+
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
